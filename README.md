@@ -53,7 +53,7 @@ Contributions are welcome! Feel free to:
 
 Open issues for bugs or feature requests
 Submit pull requests with improvements
-Enhance modules (better models, new automations, UI polish)
+Enhance modules (better models, new automations, UI polish, new features)
 
 Please follow standard GitHub flow: fork → branch → PR.
 License
