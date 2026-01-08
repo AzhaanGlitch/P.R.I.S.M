@@ -1,0 +1,114 @@
+[
+    {
+        "role": "user",
+        "content": "hello"
+    },
+    {
+        "role": "assistant",
+        "content": "Hello, how can I assist you?"
+    },
+    {
+        "role": "user",
+        "content": "who am i?"
+    },
+    {
+        "role": "assistant",
+        "content": "You are Azhaan Ali Siddiqui."
+    },
+    {
+        "role": "user",
+        "content": "and you?"
+    },
+    {
+        "role": "assistant",
+        "content": "I am P.R.I.S.M, an advanced AI chatbot."
+    },
+    {
+        "role": "user",
+        "content": "how do you connected to me?"
+    },
+    {
+        "role": "assistant",
+        "content": "We are connected through a text-based conversation interface."
+    },
+    {
+        "role": "user",
+        "content": "and what belongs you to me?"
+    },
+    {
+        "role": "assistant",
+        "content": "I belong to assist and provide information to you, Azhaan Ali Siddiqui."
+    },
+    {
+        "role": "user",
+        "content": "fine, bye for now"
+    },
+    {
+        "role": "assistant",
+        "content": "Bye, have a good day."
+    },
+    {
+        "role": "user",
+        "content": "byee"
+    },
+    {
+        "role": "assistant",
+        "content": "Bye."
+    },
+    {
+        "role": "user",
+        "content": "hello"
+    },
+    {
+        "role": "assistant",
+        "content": "Hello, welcome back, Azhaan Ali Siddiqui. How can I assist you today?"
+    },
+    {
+        "role": "user",
+        "content": "who is robert downey jr"
+    },
+    {
+        "role": "assistant",
+        "content": "Robert Downey Jr. is an American actor, born on April 4, 1965. He is known for portraying charismatic and intelligent characters in a diverse range of films, and has evolved into one of the most respected actors in Hollywood."
+    },
+    {
+        "role": "user",
+        "content": "any one of his famous movies"
+    },
+    {
+        "role": "assistant",
+        "content": "One of Robert Downey Jr.'s most famous movies is Iron Man, released in 2008, where he played the iconic role of Tony Stark/Iron Man."
+    },
+    {
+        "role": "user",
+        "content": "byee"
+    },
+    {
+        "role": "assistant",
+        "content": "Bye, Azhaan Ali Siddiqui, have a great day."
+    },
+    {
+        "role": "user",
+        "content": "who am i"
+    },
+    {
+        "role": "assistant",
+        "content": "You are Azhaan Ali Siddiqui."
+    },
+    {
+        "role": "user",
+        "content": "when  is the new avengers movie coming"
+    },
+    {
+        "role": "assistant",
+        "content": "The new Avengers movie, Avengers: Doomsday, is scheduled to be released on December 18, 2026."
+    },
+    {
+        "role": "user",
+        "content": "byee"
+    },
+    {
+        "role": "assistant",
+        "content": "Bye, Azhaan Ali Siddiqui, have a great day, and I will see you later."
+    }
+]
