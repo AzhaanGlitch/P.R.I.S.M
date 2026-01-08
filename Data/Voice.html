@@ -5,57 +5,54 @@
     <title>Speech Recognition</title>
 </head>
 <body>
-    <button id="start" onclick="startRecognition()">Start Recognition</button>
-    <button id="end" onclick="stopRecognition()">Stop Recognition</button>
-    <p id="output"></p>
-    <p id="status" style="color: gray;">Ready</p>
+    <div id="output"></div>
     <script>
         const output = document.getElementById('output');
-        const status = document.getElementById('status');
         let recognition;
         let isRecognizing = false;
 
         function startRecognition() {
             if (isRecognizing) return;
-            
-            recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
             recognition.lang = 'en';
             recognition.continuous = true;
-            recognition.interimResults = false;
+            recognition.interimResults = true;
 
-            recognition.onstart = function() {
-                isRecognizing = true;
-                status.textContent = 'Listening...';
-                status.style.color = 'green';
+            recognition.onresult = (event) => {
+                let final = '';
+                let interim = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const trans = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        final += trans + ' ';
+                    } else {
+                        interim = trans;
+                    }
+                }
+                output.textContent = final + interim;
             };
 
-            recognition.onresult = function(event) {
-                const transcript = event.results[event.results.length - 1][0].transcript;
-                output.textContent += transcript;
-            };
-
-            recognition.onerror = function(event) {
-                status.textContent = 'Error: ' + event.error;
-                status.style.color = 'red';
-                isRecognizing = false;
-            };
-
-            recognition.onend = function() {
-                if (isRecognizing) {
-                    recognition.start();
+            recognition.onerror = (event) => {
+                if (['no-speech', 'audio-capture', 'network'].includes(event.error)) {
+                    setTimeout(() => { if (isRecognizing) recognition.start(); }, 1000);
                 }
             };
-            
+
+            recognition.onend = () => {
+                if (isRecognizing) recognition.start();
+            };
+
             recognition.start();
+            isRecognizing = true;
         }
 
         function stopRecognition() {
             isRecognizing = false;
-            if (recognition) {
-                recognition.stop();
-            }
-            status.textContent = 'Stopped';
-            status.style.color = 'gray';
+            if (recognition) recognition.stop();
         }
     </script>
 </body>
