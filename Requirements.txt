@@ -1,9 +1,9 @@
 # Core dependencies
 python-dotenv==1.0.0
 
-# AI/ML APIs
-cerebras-cloud-sdk==1.0.0
-cohere==5.0.0
+# AI/ML APIs - UPDATED VERSIONS
+cerebras-cloud-sdk>=1.0.0,<2.0.0
+cohere>=5.0.0,<6.0.0
 
 # Speech Recognition & Translation
 selenium==4.15.0
@@ -17,15 +17,18 @@ pyttsx3==2.90
 pyautogui==0.9.54
 requests==2.31.0
 
-# System Control (Windows)
-pycaw==20230407
-comtypes==1.2.0
+# System Control (Windows only)
+pycaw==20230407;platform_system=="Windows"
+comtypes==1.2.0;platform_system=="Windows"
 
-# Rich terminal output (optional, for Model.py)
+# Rich terminal output
 rich==13.7.0
 
-# Image Generation (if using HuggingFace)
+# Image Generation
 Pillow==10.1.0
+
+# GUI (usually comes with Python)
+# If tkinter missing, install python3-tk on Linux
 
 # Notes:
 # - For Windows: All packages should work out of the box
@@ -33,3 +36,10 @@ Pillow==10.1.0
 # - pycaw and comtypes are Windows-only (for volume control)
 # - Install Chrome browser before running SpeechToText.py
 # - ChromeDriver will be auto-downloaded by webdriver-manager
+
+# Installation command:
+# pip install -r Requirements.txt
+
+# If you get version conflicts, try:
+# pip install --upgrade cerebras-cloud-sdk
+# pip install --upgrade cohere
