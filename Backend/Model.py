@@ -6,10 +6,13 @@ from dotenv import dotenv_values
 env_vars = dotenv_values(".env")
 CohereAPIKey = env_vars.get("CohereAPIKey")
 
-# Initialize Cohere Client
-# Using V1 client for compatibility with your existing structure, 
-# but updating the model name to a current live version.
-co = cohere.Client(api_key=CohereAPIKey)
+# Initialize Cohere Client with error handling
+co = None
+try:
+    co = cohere.Client(api_key=CohereAPIKey)
+except Exception as e:
+    print(f"Warning: Cohere client initialization failed: {e}")
+    print("Model will attempt to reinitialize on first use.")
 
 funcs = [
     "exit", "general", "realtime", "open", "close", "play",
@@ -38,7 +41,6 @@ You will decide whether a query is a 'general' query, a 'realtime' query, or is 
 *** If the user says goodbye, respond with 'exit'. ***
 """
 
-# standardized to "text" key which is the current requirement for chat_history
 ChatHistory = [
     {"role": "User", "text": "how are you?"},
     {"role": "Chatbot", "text": "general how are you?"},
@@ -55,38 +57,47 @@ ChatHistory = [
 ]
 
 def FirstLayerDMM(prompt: str = "test"):
-    # Using 'command-a-03-2025' which is the 2026 recommended model
-    # Alternatively use 'command-r-08-2024' if you prefer the R-series
-    stream = co.chat_stream(
-        model='command-a-03-2025', 
-        message=prompt,
-        temperature=0.7,
-        chat_history=ChatHistory,
-        prompt_truncation='OFF',
-        preamble=preamble
-    )
+    global co
+    
+    try:
+        # Reinitialize client if needed
+        if co is None:
+            co = cohere.Client(api_key=CohereAPIKey)
+        
+        stream = co.chat_stream(
+            model='command-r-08-2024',  # Using stable model
+            message=prompt,
+            temperature=0.7,
+            chat_history=ChatHistory,
+            prompt_truncation='OFF',
+            preamble=preamble
+        )
 
-    response_text = ""
-    for event in stream:
-        # Handling the event structure correctly for the updated SDK
-        if event.event_type == "text-generation":
-            response_text += event.text
-    
-    # Process and filter the tasks
-    tasks = [i.strip() for i in response_text.replace("\n", "").split(",")]
-    
-    filtered_tasks = []
-    for task in tasks:
-        for func in funcs:
-            if task.startswith(func):
-                filtered_tasks.append(task)
-                break
+        response_text = ""
+        for event in stream:
+            if event.event_type == "text-generation":
+                response_text += event.text
+        
+        # Process and filter the tasks
+        tasks = [i.strip() for i in response_text.replace("\n", "").split(",")]
+        
+        filtered_tasks = []
+        for task in tasks:
+            for func in funcs:
+                if task.startswith(func):
+                    filtered_tasks.append(task)
+                    break
 
-    # Recursion check: if model uses placeholder '(query)'
-    if any("(query)" in item for item in filtered_tasks):
-        return FirstLayerDMM(prompt=prompt)
+        # Recursion check: if model uses placeholder '(query)'
+        if any("(query)" in item for item in filtered_tasks):
+            return FirstLayerDMM(prompt=prompt)
+        
+        return filtered_tasks if filtered_tasks else ["general " + prompt]
     
-    return filtered_tasks
+    except Exception as e:
+        print(f"Error in FirstLayerDMM: {str(e)}")
+        # Fallback: treat as general query
+        return ["general " + prompt]
 
 if __name__ == "__main__":
     while True:
