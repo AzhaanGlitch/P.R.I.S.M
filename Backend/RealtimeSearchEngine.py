@@ -1,8 +1,8 @@
 import datetime
 import requests
 from json import load, dump
-from cerebras.cloud.sdk import Cerebras
 from dotenv import dotenv_values
+import os
 
 env_vars = dotenv_values(".env")
 Username = env_vars.get("Username")
@@ -10,7 +10,14 @@ Assistantname = env_vars.get("Assistantname")
 CerebrasAPIKey = env_vars.get("CerebrasAPIKey")
 SerperAPIKey = env_vars.get("SerperAPIKey")
 
-client = Cerebras(api_key=CerebrasAPIKey)
+# Initialize client with error handling
+client = None
+try:
+    from cerebras.cloud.sdk import Cerebras
+    client = Cerebras(api_key=CerebrasAPIKey)
+except Exception as e:
+    print(f"Warning: Cerebras client initialization failed: {e}")
+    print("RealtimeSearchEngine will attempt to reinitialize on first use.")
 
 System = f"""Hello, I am {Username}. You are a very accurate and advanced AI chatbot named {Assistantname} which has real-time up-to-date information from the internet.
 *** Provide Answers In a Professional Way, make sure to add full stops, commas, question marks, and use proper grammar.***
@@ -20,7 +27,6 @@ try:
     with open(r"Data\ChatLog.json", "r") as f:
         messages = load(f)
 except (FileNotFoundError, Exception):
-    import os
     if not os.path.exists("Data"):
         os.makedirs("Data")
     with open(r"Data\ChatLog.json", "w") as f:
@@ -64,16 +70,22 @@ def Information():
             f"Time: {now.strftime('%H')}:{now.strftime('%M')}:{now.strftime('%S')}\n")
 
 def RealtimeSearchEngine(prompt):
-    global SystemChatBot, messages
-    with open(r"Data\ChatLog.json", "r") as f:
-        messages = load(f)
-    messages.append({"role": "user", "content": prompt})
+    global SystemChatBot, messages, client
     
-    SystemChatBot.append({"role": "system", "content": GoogleSearch(prompt)})
-
     try:
+        # Reinitialize client if needed
+        if client is None:
+            from cerebras.cloud.sdk import Cerebras
+            client = Cerebras(api_key=CerebrasAPIKey)
+        
+        with open(r"Data\ChatLog.json", "r") as f:
+            messages = load(f)
+        messages.append({"role": "user", "content": prompt})
+        
+        SystemChatBot.append({"role": "system", "content": GoogleSearch(prompt)})
+
         completion = client.chat.completions.create(
-            model="llama-3.3-70b", # Corrected Model ID
+            model="llama-3.3-70b",
             messages=SystemChatBot + [{"role": "system", "content": Information()}] + messages,
             temperature=0.7,
             max_tokens=2048,
@@ -96,8 +108,11 @@ def RealtimeSearchEngine(prompt):
         return AnswerModifier(Answer)
     
     except Exception as e:
-        SystemChatBot.pop()
-        return f"Error connecting to Cerebras: {e}"
+        if len(SystemChatBot) > 3:
+            SystemChatBot.pop()
+        error_msg = f"Error in RealtimeSearchEngine: {str(e)}"
+        print(error_msg)
+        return "I encountered an error while searching. Please try again or check your API configuration."
 
 if __name__ == "__main__":
     while True:
