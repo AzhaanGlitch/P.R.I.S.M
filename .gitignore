@@ -1,2 +1,178 @@
+# ============================================
+# P.R.I.S.M - Git Ignore Configuration
+# ============================================
+
+# Environment Variables (CRITICAL - Contains API Keys!)
 .env
-.venv
+
+# Python Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyc
+*.pyo
+
+# Data Files (Generated at Runtime)
+Data/
+!Data/.gitkeep
+
+# Chat Logs (Contains Personal Conversations)
+Data/ChatLog.json
+
+# Voice Input/Output
+Data/VoiceInput.txt
+Data/Voice.html
+
+# Frontend Communication Files
+Frontend/Files/*.data
+!Frontend/Files/README.md
+
+# Generated Images (Can be Large)
+Images/
+!Images/.gitkeep
+
+# Screenshots
+Screenshots/
+!Screenshots/.gitkeep
+
+# Selenium WebDriver (OS-Specific Binary)
+Backend/chromedriver.exe
+Backend/chromedriver
+Backend/geckodriver.exe
+Backend/msedgedriver.exe
+
+# Chrome/Browser Data
+Backend/*.log
+selenium-*.log
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Backup Files
+*.bak
+*.backup
+*~
+
+# Test Files (Optional)
+tests/__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation Build
+docs/_build/
+
+# Jupyter Notebooks (if you use them)
+.ipynb_checkpoints/
+*.ipynb
+
+# PyInstaller (if you build executables)
+*.spec
+
+# Distribution / Packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+MANIFEST
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ============================================
+# P.R.I.S.M Specific
+# ============================================
+
+# User-specific configurations (optional)
+config.local.json
+settings.local.json
+
+# Large model files (if you download any locally)
+models/
+*.bin
+*.pkl
+*.h5
+*.onnx
+
+# Audio files (if you record audio)
+audio/
+*.wav
+*.mp3
+
+# Video files
+videos/
+*.mp4
+*.avi
+
+# Database files (if you use SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Any personal notes or TODO files
+TODO.txt
+NOTES.txt
+personal_notes/
