@@ -1,7 +1,6 @@
 import os
 import datetime
 from json import load, dump
-from cerebras.cloud.sdk import Cerebras
 from dotenv import dotenv_values
 
 # Load environment variables
@@ -11,8 +10,14 @@ Username = env_vars.get("Username")
 Assistantname = env_vars.get("Assistantname")
 CerebrasAPIKey = env_vars.get("CerebrasAPIKey")
 
-# Initialize Cerebras client
-client = Cerebras(api_key=CerebrasAPIKey)
+# Initialize Cerebras client with error handling
+client = None
+try:
+    from cerebras.cloud.sdk import Cerebras
+    client = Cerebras(api_key=CerebrasAPIKey)
+except Exception as e:
+    print(f"Warning: Cerebras client initialization failed: {e}")
+    print("ChatBot will attempt to reinitialize on first use.")
 
 # System prompt definition
 System = f"""Hello, I am {Username}, You are a very accurate and advanced AI chatbot named {Assistantname} which also has real-time up-to-date information from the internet.
@@ -53,14 +58,21 @@ def AnswerModifier(Answer):
 
 def ChatBot(Query):
     """ Sends the query to Cerebras and returns the AI's response. """
+    global client
+    
     try:
+        # Reinitialize client if needed
+        if client is None:
+            from cerebras.cloud.sdk import Cerebras
+            client = Cerebras(api_key=CerebrasAPIKey)
+        
         # Load existing chat log
         with open(r"Data\ChatLog.json", "r") as f:
             local_messages = load(f)
 
         local_messages.append({"role": "user", "content": f"{Query}"})
 
-        # Request to Cerebras Cloud - Using the updated Model ID
+        # Request to Cerebras Cloud
         completion = client.chat.completions.create(
             model="llama-3.3-70b", 
             messages=SystemChatBot + [{"role": "system", "content": RealtimeInformation()}] + local_messages,
@@ -89,11 +101,17 @@ def ChatBot(Query):
         return AnswerModifier(Answer=Answer)
 
     except Exception as e:
-        print(f"Error encountered: {e}")
-        # Reset log on error
-        with open(r"Data\ChatLog.json", "w") as f:
-            dump([], f, indent=4)
-        return "I encountered a technical error. My memory has been cleared. How can I help you now?"
+        error_msg = f"Error in ChatBot: {str(e)}"
+        print(error_msg)
+        
+        # Try to reset log on error
+        try:
+            with open(r"Data\ChatLog.json", "w") as f:
+                dump([], f, indent=4)
+        except:
+            pass
+            
+        return "I encountered a technical error. Please try again or check your API configuration."
 
 if __name__ == "__main__":
     print(f"System: {Assistantname} is now online.")
