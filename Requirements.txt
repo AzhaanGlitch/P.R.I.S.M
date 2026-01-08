@@ -1,17 +1,35 @@
-python-dotenv
-groq
-AppOpener
-pywhatkit
-bs4
-pillow
-rich
-requests
-keyboard
-cohere
-googlesearch-python
-selenium
-mtranslate
-pygame
-edge-tts
-PyQt5
-webdriver-manager
+# Core dependencies
+python-dotenv==1.0.0
+
+# AI/ML APIs
+cerebras-cloud-sdk==1.0.0
+cohere==5.0.0
+
+# Speech Recognition & Translation
+selenium==4.15.0
+webdriver-manager==4.0.1
+mtranslate==1.8
+
+# Text-to-Speech
+pyttsx3==2.90
+
+# Automation
+pyautogui==0.9.54
+requests==2.31.0
+
+# System Control (Windows)
+pycaw==20230407
+comtypes==1.2.0
+
+# Rich terminal output (optional, for Model.py)
+rich==13.7.0
+
+# Image Generation (if using HuggingFace)
+Pillow==10.1.0
+
+# Notes:
+# - For Windows: All packages should work out of the box
+# - For Linux/Mac: You may need additional system dependencies
+# - pycaw and comtypes are Windows-only (for volume control)
+# - Install Chrome browser before running SpeechToText.py
+# - ChromeDriver will be auto-downloaded by webdriver-manager
