@@ -95,12 +95,16 @@ def start_server():
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory="Data", **kwargs)
+        
+        def log_message(self, format, *args):
+            pass  # Suppress server logs
+    
     httpd = socketserver.TCPServer(("", PORT), Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
 start_server()
 
-# Driver setup (uses your existing chromedriver.exe)
+# Driver setup
 script_dir = os.path.dirname(os.path.abspath(__file__))
 local_driver = os.path.join(script_dir, "chromedriver.exe")
 
@@ -112,6 +116,7 @@ options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
 options.add_argument("--log-level=3")
+options.add_argument("--headless")  # Run in background
 
 service = Service(local_driver)
 driver = webdriver.Chrome(service=service, options=options)
@@ -120,9 +125,16 @@ driver = webdriver.Chrome(service=service, options=options)
 driver.get(Link)
 WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.ID, "output")))
 driver.execute_script("startRecognition();")
-driver.minimize_window() 
 
 output_element = driver.find_element(By.ID, "output")
+
+# Output file for Main.py to read
+VOICE_OUTPUT_FILE = "Data/VoiceInput.txt"
+
+# Ensure file exists
+if not os.path.exists(VOICE_OUTPUT_FILE):
+    with open(VOICE_OUTPUT_FILE, 'w') as f:
+        f.write("")
 
 def query_modifier(query):
     if not query or not query.strip():
@@ -144,37 +156,42 @@ def universal_translator(text):
         return text
 
 # Main loop
-print("P.R.I.S.M is Listening...")
+print("P.R.I.S.M Speech Recognition is listening...")
 
 last_text = ""
 silence_counter = 0
-max_silence = 5 
+max_silence = 3  # Reduced for faster response
 
 try:
     while True:
         current_text = output_element.text.strip()
 
-        if current_text != last_text:
-            print(f"\r{current_text:<100}", end="", flush=True)
+        if current_text != last_text and current_text:
             last_text = current_text
             silence_counter = 0
         else:
-            silence_counter += 0.5
+            silence_counter += 0.3
+            
             if silence_counter >= max_silence and last_text:
-                # Finalize
+                # Process the command
                 translated = universal_translator(last_text) if InputLanguage.split('-')[0].lower() != 'en' else last_text
                 final = query_modifier(translated)
-                print(f"\n{final}")
-                # Clear for next utterance
+                
+                print(f"[VOICE INPUT]: {final}")
+                
+                # Write to file for Main.py to process
+                with open(VOICE_OUTPUT_FILE, 'w') as f:
+                    f.write(final)
+                
+                # Clear for next command
                 driver.execute_script("document.getElementById('output').textContent = '';")
                 last_text = ""
                 silence_counter = 0
-                print("\r{:<100}".format(""), end="", flush=True)
 
-        time.sleep(0.5)
+        time.sleep(0.3)
 
 except KeyboardInterrupt:
-    print("\n\nShutting down...")
+    print("\n\nShutting down speech recognition...")
 finally:
     driver.execute_script("stopRecognition();")
     driver.quit()
