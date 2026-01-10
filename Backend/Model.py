@@ -38,7 +38,7 @@ You will decide whether a query is a 'general' query, a 'realtime' query, or is 
 -> Respond with 'google search (topic)' for web searches.
 -> Respond with 'youtube search (topic)' for video searches.
 *** If the query involves multiple tasks, separate them with commas. ***
-*** If the user says goodbye, respond with 'exit'. ***
+*** If the user says goodbye, bye, exit, quit, shutdown, or similar, respond ONLY with 'exit'. ***
 """
 
 ChatHistory = [
@@ -50,6 +50,12 @@ ChatHistory = [
     {"role": "Chatbot", "text": "open chrome, general tell me about mahatma gandhi."},
     {"role": "User", "text": "open chrome and firefox"},
     {"role": "Chatbot", "text": "open chrome, open firefox"},
+    {"role": "User", "text": "goodbye"},
+    {"role": "Chatbot", "text": "exit"},
+    {"role": "User", "text": "bye"},
+    {"role": "Chatbot", "text": "exit"},
+    {"role": "User", "text": "exit"},
+    {"role": "Chatbot", "text": "exit"},
     {"role": "User", "text": "what is today's date and remind me about my dance."},
     {"role": "Chatbot", "text": "general what is today's date, reminder 11:00pm 5th aug dancing performance"},
     {"role": "User", "text": "chat with me."},
@@ -59,13 +65,21 @@ ChatHistory = [
 def FirstLayerDMM(prompt: str = "test"):
     global co
     
+    # Quick exit detection (skip AI for common exit phrases)
+    exit_phrases = ['bye', 'goodbye', 'exit', 'quit', 'shutdown', 'close', 'see you']
+    if any(phrase in prompt.lower() for phrase in exit_phrases):
+        # Check if it's ONLY an exit command (not "goodbye and open chrome")
+        words = prompt.lower().split()
+        if len(words) <= 2 and any(phrase in prompt.lower() for phrase in exit_phrases):
+            return ["exit"]
+    
     try:
         # Reinitialize client if needed
         if co is None:
             co = cohere.Client(api_key=CohereAPIKey)
         
         stream = co.chat_stream(
-            model='command-r-08-2024',  # Using stable model
+            model='command-r-08-2024',
             message=prompt,
             temperature=0.7,
             chat_history=ChatHistory,
@@ -96,6 +110,9 @@ def FirstLayerDMM(prompt: str = "test"):
     
     except Exception as e:
         print(f"Error in FirstLayerDMM: {str(e)}")
+        # Check for exit command on error
+        if any(phrase in prompt.lower() for phrase in ['bye', 'goodbye', 'exit', 'quit']):
+            return ["exit"]
         # Fallback: treat as general query
         return ["general " + prompt]
 
