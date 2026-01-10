@@ -1,27 +1,45 @@
 import tkinter as tk
-from tkinter import font as tkfont
 import threading
 import time
 import os
 import math
-from PIL import Image, ImageTk, ImageDraw
+import random
 
-class VoiceAssistantGUI:
+class JarvisStyleGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("P.R.I.S.M")
+        self.root.title("Prism")
         
         # Fullscreen setup
         self.root.attributes('-fullscreen', True)
         self.root.configure(bg='black')
-        self.root.bind('<Escape>', lambda e: self.root.destroy())
+        self.root.bind('<Escape>', lambda e: self.close_app())
+        
+        # Get screen dimensions FIRST
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+        
+        # Calculate center BEFORE using it
+        self.center_x = self.screen_width // 2
+        self.center_y = self.screen_height // 2
         
         # Animation variables
         self.angle = 0
-        self.pulse_radius = 100
-        self.pulse_direction = 1
+        self.rotation_speed = 0.015  # Reduced from 0.03 (slower rotation)
+        self.base_radius = 80  # Reduced from 150 (smaller orb)
+        self.current_radius = self.base_radius
+        self.target_radius = self.base_radius
         self.listening = False
-        self.is_speaking = False
+        self.running = True
+        
+        # Particle system
+        self.particles = []
+        
+        # Hexagon grid
+        self.hexagons = []
+        
+        # Ripple effects
+        self.ripples = []
         
         # File paths
         self.files = {
@@ -35,186 +53,390 @@ class VoiceAssistantGUI:
             if not os.path.exists(file_path):
                 open(file_path, 'w').close()
         
+        # Setup UI first
         self.setup_ui()
-        self.write_file('mic', '1')  # Start listening immediately
+        
+        # Now initialize particles and hexagons
+        self.init_particles()
+        self.init_hexagons()
+        
+        self.write_file('mic', '1')
         self.start_monitoring()
         self.animate()
         
     def setup_ui(self):
-        # Get screen dimensions
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        
-        # Main canvas for drawing
+        """Setup the main canvas"""
         self.canvas = tk.Canvas(
             self.root,
-            width=screen_width,
-            height=screen_height,
+            width=self.screen_width,
+            height=self.screen_height,
             bg='black',
             highlightthickness=0
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
+    
+    def init_particles(self):
+        """Initialize floating particles"""
+        for _ in range(40):
+            self.particles.append({
+                'angle': random.uniform(0, math.pi * 2),
+                'distance': random.uniform(200, 400),
+                'speed': random.uniform(0.005, 0.02),
+                'size': random.uniform(1, 3),
+                'orbit_offset': random.uniform(0, math.pi * 2)
+            })
+    
+    def init_hexagons(self):
+        """Initialize hexagon grid pattern"""
+        hex_size = 40
+        for i in range(-3, 4):
+            for j in range(-3, 4):
+                x = self.center_x + i * hex_size * 1.5
+                y = self.center_y + j * hex_size * math.sqrt(3)
+                if j % 2 != 0:
+                    x += hex_size * 0.75
+                
+                distance = math.sqrt((x - self.center_x)**2 + (y - self.center_y)**2)
+                if distance < 350:
+                    self.hexagons.append({
+                        'x': x,
+                        'y': y,
+                        'size': hex_size * 0.5,
+                        'phase': random.uniform(0, math.pi * 2)
+                    })
+    
+    def draw_hexagon(self, x, y, size, alpha=1.0):
+        """Draw a single hexagon"""
+        points = []
+        for i in range(6):
+            angle = math.pi / 3 * i
+            px = x + size * math.cos(angle)
+            py = y + size * math.sin(angle)
+            points.extend([px, py])
         
-        self.center_x = screen_width // 2
-        self.center_y = screen_height // 2
+        # Calculate opacity - ensure valid range
+        opacity = max(0, min(255, int(255 * alpha)))
+        color = f'#{opacity:02x}{opacity:02x}{opacity:02x}'
         
-        # Status text at bottom
-        self.status_label = tk.Label(
-            self.root,
-            text="Initializing...",
-            font=('Segoe UI', 14),
-            fg='#8000ff',
-            bg='black'
-        )
-        self.status_label.place(relx=0.5, rely=0.9, anchor='center')
+        if len(points) >= 4:
+            self.canvas.create_polygon(points, outline=color, fill='', width=1)
+    
+    def draw_rotating_rings(self):
+        """Draw multiple rotating rings like JARVIS"""
+        num_rings = 8
         
-        # Title at top (optional, can be removed)
-        self.title_label = tk.Label(
-            self.root,
-            text="P.R.I.S.M",
-            font=('Orbitron', 28, 'bold'),
-            fg='#8000ff',
-            bg='black'
-        )
-        self.title_label.place(relx=0.5, rely=0.05, anchor='center')
-        
-    def draw_orb(self):
-        self.canvas.delete("all")
-        
-        # Determine color based on state
-        if self.is_speaking:
-            # Speaking - Green pulsing
-            base_color = (0, 255, 100)
-            glow_color = '#00ff64'
-        elif self.listening:
-            # Listening - Purple/Blue pulsing
-            base_color = (128, 0, 255)
-            glow_color = '#8000ff'
-        else:
-            # Idle - Dim purple
-            base_color = (80, 0, 120)
-            glow_color = '#500078'
-        
-        # Pulsing effect
-        pulse_offset = math.sin(self.angle * 2) * 20
-        current_radius = self.pulse_radius + pulse_offset
-        
-        # Draw multiple glowing rings
-        for i in range(8, 0, -1):
-            radius = current_radius + (i * 15)
-            opacity = 255 - (i * 25)
+        for i in range(num_rings):
+            ring_offset = i * 25
+            ring_radius = self.current_radius + ring_offset
             
-            # Calculate color with opacity
-            r, g, b = base_color
-            color = f'#{r:02x}{g:02x}{b:02x}'
+            # Rotating segments
+            num_segments = 32
+            segment_angle = (math.pi * 2) / num_segments
+            
+            for j in range(num_segments):
+                # Calculate rotation with offset per ring
+                angle_start = self.angle * (1 + i * 0.2) + j * segment_angle
+                angle_end = angle_start + segment_angle * 0.7
+                
+                # Only draw some segments (broken ring effect)
+                if (j + i) % 3 == 0 or (j + i) % 5 == 0:
+                    x1 = self.center_x + ring_radius * math.cos(angle_start)
+                    y1 = self.center_y + ring_radius * math.sin(angle_start)
+                    x2 = self.center_x + ring_radius * math.cos(angle_end)
+                    y2 = self.center_y + ring_radius * math.sin(angle_end)
+                    
+                    # Fade based on distance - ensure valid range
+                    fade = max(0, min(1, 1 - (i / num_rings)))
+                    opacity = max(0, min(255, int(100 + 155 * fade)))
+                    
+                    # Cyan color with proper bounds
+                    r = opacity
+                    g = max(0, min(255, opacity + 50))
+                    b = 255
+                    color = f'#{r:02x}{g:02x}{b:02x}'
+                    
+                    self.canvas.create_line(
+                        x1, y1, x2, y2,
+                        fill=color,
+                        width=2,
+                        smooth=True
+                    )
+    
+    def draw_orbit_rings(self):
+        """Draw orbiting rings at different angles"""
+        num_orbits = 5
+        
+        for i in range(num_orbits):
+            orbit_radius = self.current_radius + 50
+            tilt = (i / num_orbits) * math.pi
+            rotation_offset = self.angle * (1 + i * 0.3)
+            
+            # Draw elliptical orbit
+            points = []
+            segments = 60
+            
+            for j in range(segments + 1):
+                angle = (j / segments) * math.pi * 2 + rotation_offset
+                
+                x = orbit_radius * math.cos(angle)
+                y = orbit_radius * math.sin(angle) * math.cos(tilt)
+                z = orbit_radius * math.sin(angle) * math.sin(tilt)
+                
+                # 3D to 2D projection
+                scale = 1 / (1 + z / 1000)
+                screen_x = self.center_x + x * scale
+                screen_y = self.center_y + y * scale
+                
+                points.append((screen_x, screen_y))
+            
+            # Draw the orbit
+            for j in range(len(points) - 1):
+                opacity = max(0, min(255, int(50 + 50 * (1 - i / num_orbits))))
+                g_val = opacity
+                b_val = max(0, min(255, opacity + 100))
+                color = f'#00{g_val:02x}{b_val:02x}'
+                
+                self.canvas.create_line(
+                    points[j][0], points[j][1],
+                    points[j+1][0], points[j+1][1],
+                    fill=color,
+                    width=1,
+                    smooth=True
+                )
+    
+    def draw_particles(self):
+        """Draw floating particles"""
+        for particle in self.particles:
+            # Update particle position
+            particle['angle'] += particle['speed']
+            orbit_angle = particle['angle'] + particle['orbit_offset']
+            
+            x = self.center_x + particle['distance'] * math.cos(orbit_angle)
+            y = self.center_y + particle['distance'] * math.sin(orbit_angle)
+            
+            # Pulsing effect
+            pulse = 0.5 + 0.5 * math.sin(self.angle * 3 + particle['orbit_offset'])
+            size = particle['size'] * pulse
+            
+            # Draw particle
+            self.canvas.create_oval(
+                x - size, y - size,
+                x + size, y + size,
+                fill='#00ffff',
+                outline=''
+            )
+            
+            # Draw connection line to center (sometimes)
+            if random.random() < 0.1:
+                opacity = max(0, min(255, int(50 * pulse)))
+                color = f'#00{opacity:02x}{opacity:02x}'
+                self.canvas.create_line(
+                    x, y, self.center_x, self.center_y,
+                    fill=color,
+                    width=1
+                )
+    
+    def draw_hexagon_grid(self):
+        """Draw animated hexagon grid in background"""
+        for hex_data in self.hexagons:
+            distance = math.sqrt(
+                (hex_data['x'] - self.center_x)**2 + 
+                (hex_data['y'] - self.center_y)**2
+            )
+            
+            # Pulse based on distance from center
+            pulse = math.sin(self.angle * 2 - distance / 50 + hex_data['phase'])
+            alpha = max(0, min(1, 0.1 + 0.15 * pulse))
+            
+            # Only draw if visible
+            if alpha > 0.05:
+                self.draw_hexagon(hex_data['x'], hex_data['y'], hex_data['size'], alpha)
+    
+    def draw_core_sphere(self):
+        """Draw the central bright sphere"""
+        # Multiple layers for depth
+        layers = 8
+        
+        for i in range(layers, 0, -1):
+            radius = (self.current_radius * 0.4) * (i / layers)
+            opacity = max(0, min(255, int(50 + (205 * (i / layers)))))
+            
+            # Bright cyan/white gradient
+            if i > layers * 0.7:
+                color = f'#{opacity:02x}{opacity:02x}{255:02x}'
+            else:
+                color = f'#00{opacity:02x}{255:02x}'
             
             self.canvas.create_oval(
                 self.center_x - radius,
                 self.center_y - radius,
                 self.center_x + radius,
                 self.center_y + radius,
-                outline=color,
-                width=3
-            )
-        
-        # Rotating particles around the orb
-        num_particles = 12
-        particle_distance = current_radius + 60
-        
-        for i in range(num_particles):
-            angle_offset = (2 * math.pi / num_particles) * i
-            particle_angle = self.angle + angle_offset
-            
-            x = self.center_x + math.cos(particle_angle) * particle_distance
-            y = self.center_y + math.sin(particle_angle) * particle_distance
-            
-            particle_size = 8 + math.sin(self.angle * 3 + i) * 3
-            
-            self.canvas.create_oval(
-                x - particle_size,
-                y - particle_size,
-                x + particle_size,
-                y + particle_size,
-                fill=glow_color,
+                fill=color,
                 outline=''
             )
         
-        # Center core
-        core_radius = 40 + math.sin(self.angle * 3) * 5
+        # Bright center
+        core_radius = 20 + 10 * math.sin(self.angle * 3)
         self.canvas.create_oval(
             self.center_x - core_radius,
             self.center_y - core_radius,
             self.center_x + core_radius,
             self.center_y + core_radius,
-            fill=glow_color,
-            outline=''
-        )
-        
-        # Inner glow
-        inner_radius = 30
-        self.canvas.create_oval(
-            self.center_x - inner_radius,
-            self.center_y - inner_radius,
-            self.center_x + inner_radius,
-            self.center_y + inner_radius,
             fill='#ffffff',
-            outline=''
+            outline='#00ffff',
+            width=2
         )
+    
+    def draw_ripples(self):
+        """Draw expanding ripples when listening"""
+        if self.listening and random.random() < 0.1:
+            self.ripples.append({'radius': 0, 'alpha': 1.0})
         
+        # Update and draw ripples
+        for ripple in self.ripples[:]:
+            ripple['radius'] += 8
+            ripple['alpha'] -= 0.03
+            
+            if ripple['alpha'] <= 0:
+                self.ripples.remove(ripple)
+            else:
+                opacity = max(0, min(255, int(255 * ripple['alpha'])))
+                color = f'#00{opacity:02x}{255:02x}'
+                
+                self.canvas.create_oval(
+                    self.center_x - ripple['radius'],
+                    self.center_y - ripple['radius'],
+                    self.center_x + ripple['radius'],
+                    self.center_y + ripple['radius'],
+                    outline=color,
+                    width=2,
+                    fill=''
+                )
+    
+    def draw_data_streams(self):
+        """Draw flowing data streams around the orb"""
+        num_streams = 12
+        
+        for i in range(num_streams):
+            angle_offset = (i / num_streams) * math.pi * 2
+            stream_angle = self.angle * 2 + angle_offset
+            
+            # Stream path
+            distance = self.current_radius + 100
+            x = self.center_x + distance * math.cos(stream_angle)
+            y = self.center_y + distance * math.sin(stream_angle)
+            
+            # Draw small moving dots
+            for j in range(3):
+                dot_offset = j * 20
+                dx = x + dot_offset * math.cos(stream_angle)
+                dy = y + dot_offset * math.sin(stream_angle)
+                
+                size = 3 - j
+                opacity = max(0, min(255, int(255 - j * 80)))
+                color = f'#00{opacity:02x}{255:02x}'
+                
+                self.canvas.create_oval(
+                    dx - size, dy - size,
+                    dx + size, dy + size,
+                    fill=color,
+                    outline=''
+                )
+    
     def animate(self):
-        self.draw_orb()
-        self.angle += 0.05
+        """Main animation loop - JARVIS style"""
+        if not self.running:
+            return
         
-        # Keep angle in reasonable range
-        if self.angle > 2 * math.pi:
-            self.angle -= 2 * math.pi
+        self.canvas.delete("all")
         
-        self.root.after(30, self.animate)
+        # Smooth radius transition
+        self.current_radius += (self.target_radius - self.current_radius) * 0.08
         
+        # Layer 1: Background hexagon grid
+        self.draw_hexagon_grid()
+        
+        # Layer 2: Orbiting particles
+        self.draw_particles()
+        
+        # Layer 3: Orbit rings
+        self.draw_orbit_rings()
+        
+        # Layer 4: Rotating segmented rings
+        self.draw_rotating_rings()
+        
+        # Layer 5: Ripple effects
+        self.draw_ripples()
+        
+        # Layer 6: Data streams
+        self.draw_data_streams()
+        
+        # Layer 7: Core sphere (on top)
+        self.draw_core_sphere()
+        
+        # Update rotation
+        self.angle += self.rotation_speed
+        if self.angle > math.pi * 2:
+            self.angle -= math.pi * 2
+        
+        # 60 FPS
+        self.root.after(16, self.animate)
+    
     def write_file(self, file_key, content):
         try:
             with open(self.files[file_key], 'w') as f:
                 f.write(str(content))
         except Exception as e:
             print(f"Error writing to {file_key}: {e}")
-            
+    
     def read_file(self, file_key):
         try:
             with open(self.files[file_key], 'r') as f:
                 return f.read().strip()
         except:
             return ""
-            
+    
+    def close_app(self):
+        """Properly close the application"""
+        print("[GUI]: Closing...")
+        self.running = False
+        self.root.quit()
+        self.root.destroy()
+    
     def start_monitoring(self):
+        """Monitor status changes"""
         def monitor():
             last_status = ""
             
-            while True:
+            while self.running:
                 try:
-                    # Monitor status changes
                     status = self.read_file('status')
+                    
                     if status and status != last_status:
-                        # Update UI based on status
-                        if 'listening' in status.lower() or 'ready' in status.lower():
+                        # Check for shutdown
+                        if 'shutdown' in status.lower() or 'goodbye' in status.lower():
+                            print("[GUI]: Shutdown signal received")
+                            self.root.after(2000, self.close_app)
+                            break
+                        
+                        # Listening = larger orb with ripples
+                        if 'listening' in status.lower() or 'processing' in status.lower():
                             self.listening = True
-                            self.is_speaking = False
-                            self.status_label.config(text="Listening...", fg='#8000ff')
-                        elif 'processing' in status.lower() or 'thinking' in status.lower():
-                            self.listening = True
-                            self.is_speaking = False
-                            self.status_label.config(text="Processing...", fg='#8000ff')
-                        elif 'speaking' in status.lower() or 'responding' in status.lower():
-                            self.listening = False
-                            self.is_speaking = True
-                            self.status_label.config(text="Speaking...", fg='#00ff64')
+                            self.target_radius = self.base_radius + 100  # Increased expansion (was +80)
+                            self.rotation_speed = 0.03  # Faster rotation when listening
                         else:
-                            self.status_label.config(text=status, fg='#8000ff')
+                            self.listening = False
+                            self.target_radius = self.base_radius
+                            self.rotation_speed = 0.015  # Normal slow rotation
                         
                         last_status = status
                     
                     time.sleep(0.1)
+                    
                 except Exception as e:
-                    print(f"Monitoring error: {e}")
+                    if self.running:
+                        print(f"Monitoring error: {e}")
                     time.sleep(1)
         
         thread = threading.Thread(target=monitor, daemon=True)
@@ -222,7 +444,7 @@ class VoiceAssistantGUI:
 
 def main():
     root = tk.Tk()
-    app = VoiceAssistantGUI(root)
+    app = JarvisStyleGUI(root)
     root.mainloop()
 
 if __name__ == "__main__":
