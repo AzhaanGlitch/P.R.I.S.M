@@ -1,9 +1,9 @@
 @echo off
-title P.R.I.S.M - Voice Assistant
+title Prism Voice Assistant
 color 0d
 
 echo ================================================
-echo    P.R.I.S.M - Voice Assistant Starting...
+echo    Prism Voice Assistant Starting...
 echo ================================================
 echo.
 
@@ -13,10 +13,12 @@ if exist .venv\Scripts\activate.bat (
     call .venv\Scripts\activate.bat
 )
 
-echo [INFO] Starting P.R.I.S.M...
-echo [INFO] Press Ctrl+C to stop
+echo [INFO] Starting Prism...
+echo [INFO] Press Ctrl+C to stop or say "bye"
 echo.
 
 python Main.py
 
-pause
+echo.
+echo [INFO] Prism has been shut down.
+timeout /t 3 /nobreak >nul
