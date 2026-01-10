@@ -35,6 +35,7 @@ Data/VoiceInput.txt
 Data/Voice.html
 
 # Frontend Communication Files
+Frontend/Files
 Frontend/Files/*.data
 !Frontend/Files/README.md
 
