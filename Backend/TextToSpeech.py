@@ -1,54 +1,93 @@
 import pyttsx3
 from dotenv import dotenv_values
+import threading
 
 env_vars = dotenv_values(".env")
-VoiceRate = int(env_vars.get("VoiceRate", "160"))  # Calmer rate for JARVIS-like feel
+VoiceRate = int(env_vars.get("VoiceRate", "180"))  # Faster default
 VoiceVolume = float(env_vars.get("VoiceVolume", "1.0"))
 
+# Initialize engine once globally for faster performance
 engine = pyttsx3.init('sapi5')
 voices = engine.getProperty('voices')
 
-# Only try to select George (British male voice - closest to JARVIS)
-george_voices = [voice for voice in voices if 'george' in voice.name.lower()]
-if george_voices:
-    engine.setProperty('voice', george_voices[0].id)
-    print(f"Selected voice: {george_voices[0].name}")
+# Voice selection priority: David (UK) > Zira (US Female) > Default
+selected_voice = None
+voice_preferences = ['david', 'zira', 'microsoft david', 'microsoft zira']
+
+for pref in voice_preferences:
+    matching_voices = [v for v in voices if pref in v.name.lower()]
+    if matching_voices:
+        selected_voice = matching_voices[0]
+        break
+
+if selected_voice:
+    engine.setProperty('voice', selected_voice.id)
+    print(f"Voice: {selected_voice.name}")
 else:
-    engine.setProperty('voice', voices[0].id)
-    print(f"George not found - using default voice: {voices[0].name}")
+    # Use first available voice
+    engine.setProperty('voice', voices[0].id if voices else None)
+    print(f"Voice: {voices[0].name if voices else 'Default'}")
 
 engine.setProperty('rate', VoiceRate)
 engine.setProperty('volume', VoiceVolume)
 
+# Thread lock for engine access
+engine_lock = threading.Lock()
+
 def Speak(Text):
+    """Optimized speech function with threading support"""
     try:
-        if Text and Text.strip():
-            print(f"Speaking: {Text}")
+        if not Text or not Text.strip():
+            return False
+        
+        # Remove "P.R.I.S.M" and replace with "Prism"
+        Text = Text.replace("P.R.I.S.M", "Prism")
+        Text = Text.replace("PRISM", "Prism")
+        Text = Text.replace("P.R.I.S.M.", "Prism")
+        
+        print(f"Speaking: {Text}")
+        
+        with engine_lock:
             engine.say(Text)
             engine.runAndWait()
-            return True
-        return False
+        
+        return True
     except Exception as e:
         print(f"TTS Error: {e}")
         return False
 
 def SpeakWithoutPrint(Text):
+    """Silent speech (no console output)"""
     try:
-        if Text and Text.strip():
+        if not Text or not Text.strip():
+            return False
+        
+        # Replace PRISM variations
+        Text = Text.replace("P.R.I.S.M", "Prism")
+        Text = Text.replace("PRISM", "Prism")
+        Text = Text.replace("P.R.I.S.M.", "Prism")
+        
+        with engine_lock:
             engine.say(Text)
             engine.runAndWait()
-            return True
-        return False
+        
+        return True
     except Exception as e:
         print(f"TTS Error: {e}")
         return False
 
+def SpeakAsync(Text):
+    """Non-blocking speech"""
+    thread = threading.Thread(target=Speak, args=(Text,), daemon=True)
+    thread.start()
+    return thread
+
 if __name__ == "__main__":
-    Speak("Hello sir, I am Prism, your personal AI assistant. All systems are online and ready.")
+    Speak("Prism is online and ready, sir.")
     
     while True:
-        text = input("\nEnter text to speak (or 'exit' to quit): ")
+        text = input("\nEnter text to speak (or 'exit'): ")
         if text.lower() in ['exit', 'quit', 'bye']:
-            Speak("Goodbye sir. Shutting down systems.")
+            Speak("Goodbye sir.")
             break
         Speak(text)
