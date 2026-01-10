@@ -16,8 +16,9 @@ from Backend.ImageGeneration import GenerateImageWithRetry
 from Backend.TextToSpeech import Speak
 
 class PrismVoiceCore:
-    def __init__(self):
+    def __init__(self, gui_mode='tray'):
         self.running = True
+        self.gui_mode = gui_mode  # 'tray', 'full', or 'none'
         self.files = {
             'status': 'Frontend/Files/Status.data',
             'mic': 'Frontend/Files/Mic.data',
@@ -33,6 +34,7 @@ class PrismVoiceCore:
                 open(file_path, 'w').close()
         
         self.write_file('status', 'Initializing...')
+        self.write_file('mic', '1')  # Start listening by default
         print("P.R.I.S.M Voice Core initialized.")
         
     def write_file(self, file_key, content):
@@ -157,38 +159,51 @@ class PrismVoiceCore:
         # Monitor the output
         last_query = ""
         silence_time = 0
+        voice_file = "Data/VoiceInput.txt"
         
         while self.running:
             try:
-                # Check if there's text from voice recognition
-                # This will be written to a temp file by SpeechToText
-                voice_file = "Data/VoiceInput.txt"
+                # Check mic status
+                mic_status = self.read_file('mic')
+                if mic_status != '1':
+                    time.sleep(0.5)
+                    continue
                 
+                # Check if there's text from voice recognition
                 if os.path.exists(voice_file):
                     with open(voice_file, 'r') as f:
                         query = f.read().strip()
                     
                     if query and query != last_query:
+                        # 1. Update last_query immediately so we don't repeat
                         last_query = query
                         
-                        # Clear the file
+                        # 2. Clear the file immediately
                         with open(voice_file, 'w') as f:
                             f.write("")
                         
-                        # Process the query
+                        # 3. Process DIRECTLY (No Threading)
+                        # This blocks the loop so we don't process new inputs while speaking
                         self.process_query(query)
+                        
+                        # 4. CRITICAL: Clear the file AGAIN after speaking
+                        # This deletes the "Echo" (the assistant hearing itself)
+                        # so the loop is fresh for your next command.
+                        with open(voice_file, 'w') as f:
+                            f.write("")
+                            
                         silence_time = 0
                     else:
                         silence_time += 0.5
                 else:
                     silence_time += 0.5
                 
-                # Reset after long silence
-                if silence_time > 10:
+                # Reset after long silence to allow repeating commands
+                if silence_time > 5: # Reduced to 5 seconds for snappier response
                     last_query = ""
                     silence_time = 0
                 
-                time.sleep(0.5)
+                time.sleep(0.2) # Reduced sleep for faster response
                 
             except Exception as e:
                 print(f"Voice monitoring error: {e}")
@@ -197,17 +212,20 @@ class PrismVoiceCore:
     def run_speech_to_text(self):
         """Run the speech to text module"""
         try:
-            # Import the speech to text module
             from Backend import SpeechToText
-            
             print("[SPEECH-TO-TEXT]: Module loaded and running...")
-            
         except Exception as e:
             print(f"[ERROR]: Could not start speech recognition: {e}")
             print("[INFO]: You can still type commands in the console.")
     
     def console_input_monitor(self):
         """Monitor console for text commands (backup method)"""
+        if self.gui_mode == 'tray':
+            # In tray mode, just keep the thread alive
+            while self.running:
+                time.sleep(1)
+            return
+        
         print("[CONSOLE INPUT]: Type 'help' for commands, 'exit' to quit")
         
         while self.running:
@@ -241,8 +259,8 @@ class PrismVoiceCore:
         print("P.R.I.S.M - Personal Responsive Intelligence System Manager")
         print("="*70)
         print("\n[SYSTEM]: Starting voice-controlled assistant...")
-        print("[SYSTEM]: Speak your commands or type in the console.")
-        print("[SYSTEM]: Press Ctrl+C to exit.\n")
+        print("[SYSTEM]: Speak your commands or use system tray.")
+        print("[SYSTEM]: Press Ctrl+C in console to exit.\n")
         
         # Start voice input monitor
         voice_thread = threading.Thread(target=self.monitor_voice_input, daemon=True)
@@ -256,7 +274,7 @@ class PrismVoiceCore:
         
         print("[SYSTEM]: P.R.I.S.M is listening...\n")
         
-        # Console input as backup
+        # Console input as backup (or just wait in tray mode)
         self.console_input_monitor()
         
         # Shutdown
@@ -265,16 +283,34 @@ class PrismVoiceCore:
         Speak("Goodbye sir.")
 
 def main():
-    # Start the core system
-    core = PrismVoiceCore()
+    import argparse
     
-    # Start GUI in separate thread
+    parser = argparse.ArgumentParser(description='P.R.I.S.M Voice Assistant')
+    parser.add_argument('--mode', choices=['tray', 'full', 'console'], default='tray',
+                       help='GUI mode: tray (system tray), full (fullscreen), console (no GUI)')
+    args = parser.parse_args()
+    
+    # Start the core system
+    core = PrismVoiceCore(gui_mode=args.mode)
+    
+    # Start GUI based on mode
     try:
-        from Frontend.GUI import main as gui_main
-        gui_thread = threading.Thread(target=gui_main, daemon=False)
-        gui_thread.start()
+        if args.mode == 'tray':
+            from Frontend.SystemTrayGUI import main as tray_main
+            # Pass core instance to GUI
+            gui_thread = threading.Thread(target=lambda: tray_main(core), daemon=False)
+            gui_thread.start()
+            print("[SYSTEM]: System tray interface launched.")
+            
+        elif args.mode == 'full':
+            from Frontend.GUI import main as gui_main
+            gui_thread = threading.Thread(target=gui_main, daemon=False)
+            gui_thread.start()
+            print("[SYSTEM]: Full visual interface launched.")
         
-        print("[SYSTEM]: Visual interface launched.")
+        else:  # console mode
+            print("[SYSTEM]: Running in console-only mode.")
+        
         time.sleep(2)  # Give GUI time to initialize
         
     except Exception as e:
