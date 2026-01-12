@@ -1,3 +1,6 @@
 P.R.I.S.M -
 
 Personal Responsive Intelligence System Manager
+
+python Main.py --mode full : for full AI
+python Main.py --mode full : for side tray AI
