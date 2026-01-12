@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 from datetime import datetime
+import queue
 
 # Add Backend to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'Backend'))
@@ -18,11 +19,16 @@ from Backend.TextToSpeech import Speak
 class PrismVoiceCore:
     def __init__(self, gui_mode='tray'):
         self.running = True
-        self.gui_mode = gui_mode  # 'tray', 'full', or 'none'
+        self.gui_mode = gui_mode
         self.files = {
             'status': 'Frontend/Files/Status.data',
             'mic': 'Frontend/Files/Mic.data',
         }
+        
+        # Command queue for async processing
+        self.command_queue = queue.Queue()
+        self.is_processing = False
+        self.processing_lock = threading.Lock()
         
         # Ensure directories exist
         os.makedirs('Frontend/Files', exist_ok=True)
@@ -34,7 +40,7 @@ class PrismVoiceCore:
                 open(file_path, 'w').close()
         
         self.write_file('status', 'Initializing...')
-        self.write_file('mic', '1')  # Start listening by default
+        self.write_file('mic', '1')
         print("P.R.I.S.M Voice Core initialized.")
         
     def write_file(self, file_key, content):
@@ -52,17 +58,23 @@ class PrismVoiceCore:
             return ""
     
     def process_query(self, query):
-        """Main query processing logic"""
+        """Main query processing logic - now with faster execution"""
         if not query or len(query.strip()) < 2:
             return
         
-        print(f"\n[USER SAID]: {query}")
-        self.write_file('status', 'Processing...')
+        with self.processing_lock:
+            if self.is_processing:
+                print("[BUSY]: Already processing a command, queuing...")
+                return
+            self.is_processing = True
         
         try:
+            print(f"\n[USER SAID]: {query}")
+            self.write_file('status', 'Processing...')
+            
             # Get decision from Model
             tasks = FirstLayerDMM(query)
-            print(f"[TASKS IDENTIFIED]: {tasks}")
+            print(f"[TASKS]: {tasks}")
             
             response = ""
             
@@ -136,74 +148,98 @@ class PrismVoiceCore:
                 
                 # Speak response
                 if response:
-                    print(f"[P.R.I.S.M RESPONDS]: {response}")
+                    print(f"[PRISM]: {response}")
                     self.write_file('status', 'Speaking...')
+                    
+                    # CRITICAL: Disable mic BEFORE speaking
+                    self.write_file('mic', '0')
+                    time.sleep(0.1)  # Let mic disable
+                    
                     Speak(response)
+                    
+                    # Re-enable mic AFTER speaking
                     time.sleep(0.3)
-            
-            self.write_file('status', 'Listening...')
-            
+                    self.write_file('mic', '1')
+                    
         except Exception as e:
-            error_msg = f"Error processing query: {str(e)}"
+            error_msg = f"Error: {str(e)}"
             print(f"[ERROR]: {error_msg}")
             self.write_file('status', 'Error - Ready')
+        
+        finally:
+            with self.processing_lock:
+                self.is_processing = False
+            self.write_file('status', 'Listening...')
+    
+    def command_processor_thread(self):
+        """Background thread to process commands from queue"""
+        while self.running:
+            try:
+                # Get command with timeout
+                query = self.command_queue.get(timeout=1)
+                if query:
+                    self.process_query(query)
+                self.command_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"Processor error: {e}")
     
     def monitor_voice_input(self):
-        """Monitor for voice input from SpeechToText"""
-        print("[VOICE MONITOR]: Starting voice input monitoring...")
+        """Monitor for voice input - OPTIMIZED"""
+        print("[VOICE MONITOR]: Starting...")
         
-        # Import and start SpeechToText in a separate process
+        # Start SpeechToText in separate process
         voice_thread = threading.Thread(target=self.run_speech_to_text, daemon=True)
         voice_thread.start()
         
-        # Monitor the output
-        last_query = ""
-        silence_time = 0
+        # Start command processor
+        processor = threading.Thread(target=self.command_processor_thread, daemon=True)
+        processor.start()
+        
         voice_file = "Data/VoiceInput.txt"
+        last_query = ""
+        last_process_time = 0
         
         while self.running:
             try:
                 # Check mic status
                 mic_status = self.read_file('mic')
                 if mic_status != '1':
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     continue
                 
-                # Check if there's text from voice recognition
+                # Don't check if currently processing
+                if self.is_processing:
+                    time.sleep(0.2)
+                    continue
+                
+                # Read voice input
                 if os.path.exists(voice_file):
                     with open(voice_file, 'r') as f:
                         query = f.read().strip()
                     
-                    if query and query != last_query:
-                        # 1. Update last_query immediately so we don't repeat
+                    current_time = time.time()
+                    
+                    # Process if: new query AND not duplicate AND sufficient time passed
+                    if (query and 
+                        query != last_query and 
+                        len(query) > 2 and
+                        (current_time - last_process_time) > 2):  # 2 second cooldown
+                        
+                        print(f"[DETECTED]: {query}")
+                        
+                        # Clear file immediately
+                        with open(voice_file, 'w') as f:
+                            f.write("")
+                        
+                        # Queue command for processing
+                        self.command_queue.put(query)
+                        
                         last_query = query
-                        
-                        # 2. Clear the file immediately
-                        with open(voice_file, 'w') as f:
-                            f.write("")
-                        
-                        # 3. Process DIRECTLY (No Threading)
-                        # This blocks the loop so we don't process new inputs while speaking
-                        self.process_query(query)
-                        
-                        # 4. CRITICAL: Clear the file AGAIN after speaking
-                        # This deletes the "Echo" (the assistant hearing itself)
-                        # so the loop is fresh for your next command.
-                        with open(voice_file, 'w') as f:
-                            f.write("")
-                            
-                        silence_time = 0
-                    else:
-                        silence_time += 0.5
-                else:
-                    silence_time += 0.5
+                        last_process_time = current_time
                 
-                # Reset after long silence to allow repeating commands
-                if silence_time > 5: # Reduced to 5 seconds for snappier response
-                    last_query = ""
-                    silence_time = 0
-                
-                time.sleep(0.2) # Reduced sleep for faster response
+                time.sleep(0.15)  # Fast polling
                 
             except Exception as e:
                 print(f"Voice monitoring error: {e}")
@@ -213,41 +249,39 @@ class PrismVoiceCore:
         """Run the speech to text module"""
         try:
             from Backend import SpeechToText
-            print("[SPEECH-TO-TEXT]: Module loaded and running...")
+            print("[SPEECH-TO-TEXT]: Running...")
         except Exception as e:
             print(f"[ERROR]: Could not start speech recognition: {e}")
-            print("[INFO]: You can still type commands in the console.")
     
     def console_input_monitor(self):
-        """Monitor console for text commands (backup method)"""
+        """Monitor console for text commands"""
         if self.gui_mode == 'tray':
-            # In tray mode, just keep the thread alive
             while self.running:
                 time.sleep(1)
             return
         
-        print("[CONSOLE INPUT]: Type 'help' for commands, 'exit' to quit")
+        print("[CONSOLE]: Type commands or 'exit' to quit")
         
         while self.running:
             try:
-                user_input = input("\n[COMMAND]: ").strip()
+                user_input = input("\n[CMD]: ").strip()
                 
                 if user_input:
                     if user_input.lower() in ['exit', 'quit', 'bye']:
                         self.process_query("exit")
                         break
                     elif user_input.lower() == 'help':
-                        print("\nAvailable commands:")
-                        print("- General questions: 'how are you', 'what is AI'")
-                        print("- Real-time: 'what's the weather', 'latest news'")
-                        print("- Automation: 'open chrome', 'play music', 'take screenshot'")
-                        print("- Search: 'search for python', 'youtube search cats'")
-                        print("- Exit: 'exit', 'quit', 'bye'")
+                        print("\nCommands:")
+                        print("- Questions: 'how are you', 'what is AI'")
+                        print("- Real-time: 'weather', 'latest news'")
+                        print("- Automation: 'open chrome', 'play music'")
+                        print("- Search: 'search python', 'youtube cats'")
+                        print("- Exit: 'exit', 'quit'")
                     else:
-                        self.process_query(user_input)
+                        self.command_queue.put(user_input)
                         
             except KeyboardInterrupt:
-                print("\n[SYSTEM]: Shutting down...")
+                print("\n[SHUTDOWN]...")
                 self.running = False
                 break
             except Exception as e:
@@ -258,28 +292,31 @@ class PrismVoiceCore:
         print("\n" + "="*70)
         print("P.R.I.S.M - Personal Responsive Intelligence System Manager")
         print("="*70)
-        print("\n[SYSTEM]: Starting voice-controlled assistant...")
-        print("[SYSTEM]: Speak your commands or use system tray.")
-        print("[SYSTEM]: Press Ctrl+C in console to exit.\n")
+        print("\n[SYSTEM]: Starting voice assistant...")
+        print("[SYSTEM]: Speak commands or use system tray.")
+        print("[SYSTEM]: Press Ctrl+C to exit.\n")
         
-        # Start voice input monitor
+        # Start voice monitor
         voice_thread = threading.Thread(target=self.monitor_voice_input, daemon=True)
         voice_thread.start()
         
-        # Initialize status
+        # Set status
         self.write_file('status', 'Listening...')
         
         # Greeting
         Speak("P.R.I.S.M is online and ready, sir.")
+        time.sleep(0.5)
+        self.write_file('mic', '1')  # Ensure mic is on after greeting
         
-        print("[SYSTEM]: P.R.I.S.M is listening...\n")
+        print("[SYSTEM]: Listening...\n")
         
-        # Console input as backup (or just wait in tray mode)
+        # Console input
         self.console_input_monitor()
         
         # Shutdown
-        print("\n[SYSTEM]: Shutting down P.R.I.S.M...")
+        print("\n[SHUTDOWN]: Closing P.R.I.S.M...")
         self.write_file('status', 'Shutting down...')
+        self.write_file('mic', '0')
         Speak("Goodbye sir.")
 
 def main():
@@ -290,34 +327,33 @@ def main():
                        help='GUI mode: tray (system tray), full (fullscreen), console (no GUI)')
     args = parser.parse_args()
     
-    # Start the core system
+    # Start core
     core = PrismVoiceCore(gui_mode=args.mode)
     
-    # Start GUI based on mode
+    # Start GUI
     try:
         if args.mode == 'tray':
             from Frontend.SystemTrayGUI import main as tray_main
-            # Pass core instance to GUI
             gui_thread = threading.Thread(target=lambda: tray_main(core), daemon=False)
             gui_thread.start()
-            print("[SYSTEM]: System tray interface launched.")
+            print("[GUI]: System tray launched.")
             
         elif args.mode == 'full':
             from Frontend.GUI import main as gui_main
             gui_thread = threading.Thread(target=gui_main, daemon=False)
             gui_thread.start()
-            print("[SYSTEM]: Full visual interface launched.")
+            print("[GUI]: Full interface launched.")
         
-        else:  # console mode
-            print("[SYSTEM]: Running in console-only mode.")
+        else:
+            print("[MODE]: Console only.")
         
-        time.sleep(2)  # Give GUI time to initialize
+        time.sleep(1)
         
     except Exception as e:
-        print(f"[WARNING]: Could not launch GUI: {e}")
-        print("[SYSTEM]: Running in console-only mode.")
+        print(f"[WARNING]: GUI error: {e}")
+        print("[MODE]: Console fallback.")
     
-    # Run the core
+    # Run core
     core.run()
 
 if __name__ == "__main__":
