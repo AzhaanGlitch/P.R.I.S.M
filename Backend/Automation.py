@@ -6,7 +6,7 @@ from dotenv import dotenv_values
 
 env_vars = dotenv_values(".env")
 
-# Common application paths (customize these based on your system)
+# Common application paths 
 APP_PATHS = {
     "notepad": "notepad.exe",
     "calculator": "calc.exe",
@@ -36,8 +36,6 @@ def OpenApplication(app_name):
     """Open an application by name"""
     try:
         app_name_lower = app_name.lower().strip()
-        
-        # Check if it's in our predefined apps
         if app_name_lower in APP_PATHS:
             app_path = APP_PATHS[app_name_lower]
             if os.path.exists(app_path):
@@ -46,7 +44,6 @@ def OpenApplication(app_name):
             else:
                 return f"Application path not found: {app_path}"
         
-        # Try to open as a direct command
         try:
             subprocess.Popen(app_name_lower)
             return f"Opening {app_name}..."
@@ -61,9 +58,7 @@ def CloseApplication(app_name):
     try:
         app_name_lower = app_name.lower().strip()
         
-        # Use taskkill for Windows
         if os.name == 'nt':
-            # Common process names
             process_names = {
                 "chrome": "chrome.exe",
                 "firefox": "firefox.exe",
@@ -79,7 +74,7 @@ def CloseApplication(app_name):
             os.system(f'taskkill /F /IM {process_name}')
             return f"Closed {app_name}"
         else:
-            # For Linux/Mac
+            # For Linux/Mac (optional)
             os.system(f'pkill -f {app_name_lower}')
             return f"Closed {app_name}"
             
@@ -91,13 +86,11 @@ def OpenWebsite(website_name):
     try:
         website_lower = website_name.lower().strip()
         
-        # Check if it's in predefined websites
         if website_lower in WEBSITES:
             url = WEBSITES[website_lower]
         elif website_lower.startswith("http"):
             url = website_lower
         else:
-            # Assume it's a domain
             url = f"https://www.{website_lower}.com"
         
         webbrowser.open(url)
